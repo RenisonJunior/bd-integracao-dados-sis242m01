@@ -6,10 +6,10 @@
 
 ## Dupla
 
-**Nome da dupla:** ____________________
+**Nome da dupla:** 
 
 | Nome | Matrícula | Usuário do GitHub |
-| --- | --- | --- |
+| RENISON | 2535023 | renisonjunior |
 |  |  |  |
 |  |  |  |
 
