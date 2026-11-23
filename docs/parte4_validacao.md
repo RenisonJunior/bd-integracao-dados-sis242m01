@@ -1,129 +1,251 @@
 
-# Parte 4: Roteiro de validação com o cliente (fevereiro/2025)
+# Parte 4 — Conferência dos Dados e Reunião com o Cliente
 
-## 1. Pontos a validar
+**Período de referência:** Fevereiro de 2025
 
-A reunião tem como objetivo apresentar os resultados da integração dos dados e confirmar sua confiabilidade antes do uso em relatórios gerenciais.
+**Objetivo:** apresentar os resultados da integração dos dados, mostrar os problemas encontrados e confirmar com o cliente quais informações precisam ser corrigidas.
 
-As consultas de validação analisaram toda a base importada, incluindo registros de janeiro, fevereiro e março de 2025. Fevereiro de 2025 é o período de referência da reunião.
+> [!NOTE]
+> A importação foi concluída com 122 registros. Porém, isso não garante que todos os valores estejam corretos. Por isso, realizamos a validação.
 
-Os principais pontos que precisam ser confirmados com o cliente são:
+---
 
-1. **Recebimentos superiores aos pedidos:** identificar por que existem entradas de mercadorias em quantidades maiores que as solicitadas.
+## Visão rápida do processo
 
-2. **Divergências nos recebimentos:** conferir as diferenças entre `qtde_entregue`, na tabela `pedido_compra`, e `qtde_recebida`, na tabela `entradas_mercadoria`.
+```mermaid
+flowchart TD
+    A["📄 Planilha Excel<br/>base_teste.xlsx"]
+    B["🐍 Importação com Python"]
+    C["🗄️ PostgreSQL<br/>5 tabelas · 122 registros"]
+    D["🔎 Consultas SQL<br/>Verificação dos dados"]
+    E["📋 Problemas encontrados"]
+    F["🤝 Confirmação com o cliente"]
+    G["✅ Correções após confirmação"]
 
-3. **Ordens de compra zeradas:** verificar se o valor `0` representa ausência de ordem, erro de preenchimento ou problema na importação.
+    A --> B --> C --> D --> E --> F --> G
 
-4. **Datas inconsistentes:** confirmar o significado de `data_entrega` e investigar registros em que ela é anterior à data do pedido.
+    classDef padrao fill:#F4F7FB,stroke:#7393B3,color:#243746,stroke-width:1px;
+    classDef atencao fill:#FFF3DB,stroke:#D59B36,color:#704900,stroke-width:1px;
+    classDef final fill:#E7F6EC,stroke:#4C9A69,color:#245A37,stroke-width:1px;
 
-5. **Produtos sem cadastro correspondente:** conferir vendas associadas a produtos que não aparecem cadastrados na mesma filial.
+    class A,B,C,D padrao;
+    class E,F atencao;
+    class G final;
+```
 
-6. **Entradas sem pedidos correspondentes:** identificar documentos de entrada que não possuem uma ordem de compra correspondente na base importada.
+### Dados utilizados
 
-7. **Colunas adicionais no Excel:** esclarecer a presença de 11 colunas adicionais na aba `pedido_compra`, com informações preenchidas em nove linhas.
+As informações vieram da planilha `dados/base_teste.xlsx` e foram importadas para cinco tabelas do PostgreSQL.
 
-Um exemplo importante é o produto P2: o pedido apresenta 14 unidades solicitadas e 7 entregues, enquanto a tabela de entradas registra 64 unidades recebidas. A diferença entre o total recebido e o solicitado é de 50 unidades.
+| Tabela do banco | O que armazena | Registros |
+| --- | --- | ---: |
+| `fornecedor` | Informações dos fornecedores | 20 |
+| `produtos_filial` | Produtos cadastrados nas filiais | 20 |
+| `pedido_compra` | Pedidos feitos aos fornecedores | 29 |
+| `entradas_mercadoria` | Mercadorias registradas como recebidas | 20 |
+| `venda` | Vendas realizadas | 33 |
+| **Total** | **Registros importados** | **122** |
 
-Essa divergência deve ser esclarecida com o cliente antes de qualquer correção.
+**Conferência:** as quantidades no banco correspondem às linhas principais da planilha Excel.
 
-## 2. Técnicas para garantir exatidão e precisão
+---
 
-Foram utilizadas consultas SQL para identificar possíveis inconsistências entre os registros das tabelas.
+## 1. Pontos principais para validar
 
-As técnicas de validação incluem:
+Nesta etapa, apresentamos as informações que precisam ser confirmadas com a empresa.
 
-- **Conferência de quantidades:** comparar os valores solicitados, informados como entregues e efetivamente registrados nas entradas.
-- **Conciliação entre tabelas:** relacionar pedidos e entradas pelo número da ordem de compra e pelo identificador do produto.
-- **Validação temporal:** procurar datas de entrega anteriores às respectivas datas dos pedidos.
-- **Verificação de referências:** identificar produtos e ordens de compra sem correspondência nas tabelas relacionadas.
-- **Comparação com a fonte original:** verificar divergências entre o PostgreSQL e o arquivo `base_teste.xlsx`.
-- **Validação com o cliente:** confirmar o significado dos campos e quais registros representam corretamente as operações realizadas.
-- **Registro das evidências:** documentar as consultas, os resultados e as decisões tomadas durante a reunião.
+### 1.1 Recebimentos acima do que foi pedido
 
-As informações devem ser comparadas, quando disponíveis, com notas fiscais, pedidos originais e registros administrativos.
+Comparamos a quantidade solicitada em `pedido_compra` com a quantidade registrada em `entradas_mercadoria`.
 
-As inconsistências não devem ser corrigidas automaticamente sem confirmação da origem correta dos dados.
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **7 casos** com recebimento maior que o pedido. | A empresa costuma receber mais mercadorias do que solicita? |
+| O produto **P2** teve **14 unidades pedidas** e **64 registradas como recebidas**. | Essas 64 unidades realmente chegaram ou houve erro no registro? |
+
+**Exemplo — Produto P2**
+
+| Informação | Quantidade |
+| --- | ---: |
+| Unidades pedidas | 14 |
+| Unidades registradas como recebidas | 64 |
+| **Diferença** | **+50** |
+
+➡️ **Ponto a confirmar:** por que o recebimento registrado foi maior que o pedido?
+
+### 1.2 Diferenças entre entrega e recebimento
+
+Verificamos se a quantidade informada como entregue no pedido corresponde ao registro de entrada da mercadoria.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **18 registros** com quantidades diferentes. | Os dois campos deveriam mostrar a mesma quantidade? |
+| No produto **P1**, o pedido informa **10 unidades entregues**, mas a entrada registra **77 recebidas**. | Qual registro devemos usar como referência? |
+
+➡️ **Ponto a confirmar:** o significado das quantidades em cada tabela.
+
+### 1.3 Ordens de compra zeradas
+
+Analisamos os pedidos que possuem o campo `ordem_compra` com valor zero.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **11 pedidos** com ordem de compra igual a zero. | O valor zero tem algum significado para a empresa? |
+| Os casos aparecem nos pedidos de **ID 19 até 29**. | Esses pedidos estão incompletos ou foram registrados dessa forma de propósito? |
+
+➡️ **Ponto a confirmar:** se as ordens precisam ser corrigidas.
+
+### 1.4 Datas que precisam de conferência
+
+Comparamos as datas dos pedidos com as datas registradas para entrega.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **20 registros** com data de entrega anterior à data do pedido. | Essas datas estão corretas? |
+| No pedido **12**, produto **P12**, a compra aparece em **25/02/2025**, mas a entrega consta em **20/02/2025**. | Essa data representa uma entrega realizada ou uma previsão? |
+
+➡️ **Ponto a confirmar:** o significado e a correção das datas.
+
+### 1.5 Produtos sem cadastro correspondente
+
+Verificamos se os produtos vendidos aparecem cadastrados na tabela `produtos_filial`, considerando a mesma filial.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **13 registros de venda** sem produto correspondente no cadastro da filial. | Esses produtos deveriam estar cadastrados? |
+| Os casos foram identificados na tabela `venda`. | Pode ter ocorrido algum erro no cadastro ou no código do produto? |
+
+➡️ **Ponto a confirmar:** se faltam produtos no cadastro das filiais.
+
+### 1.6 Entradas sem pedido correspondente
+
+Comparamos as entradas de mercadorias com os pedidos de compra existentes.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| Entrada da **ordem 19**, produto **P19**, nota **NFE19**. | Existe algum pedido relacionado a essa entrada? |
+| Entrada da **ordem 20**, produto **P20**, nota **NFE20**. | Essa mercadoria foi recebida sem pedido ou houve erro no registro? |
+
+**Resultado:** 2 entradas sem correspondência encontrada nas ordens de compra e produtos registrados.
+
+➡️ **Ponto a confirmar:** a qual pedido cada entrada pertence.
+
+### 1.7 Colunas adicionais na planilha
+
+Durante a importação, encontramos informações extras na aba `pedido_compra` do Excel.
+
+| O que encontramos | Pergunta ao cliente |
+| --- | --- |
+| **11 colunas adicionais**, com informações preenchidas em **9 linhas**. | Essas colunas fazem parte da planilha oficial? |
+| No pedido **21**, produto **P12**, os valores das colunas principais são diferentes dos valores extras. | Qual conjunto de informações deve ser considerado correto? |
+
+**Exemplo do pedido 21**
+
+| Informação | Colunas principais | Colunas adicionais |
+| --- | ---: | ---: |
+| Ordem de compra | 0 | 12 |
+| Quantidade pedida | 12 | 91 |
+| Quantidade entregue | 0 | 48 |
+
+➡️ **Ponto a confirmar:** se os dados adicionais devem complementar ou substituir os principais.
+
+> [!IMPORTANT]
+> Nenhum desses valores deve ser alterado sem confirmação do cliente. Primeiro precisamos descobrir qual informação está correta.
+
+---
+
+## 2. Como a validação foi feita
+
+Utilizamos consultas SQL para comparar as informações do banco e identificar possíveis problemas.
+
+| Técnica | Como foi utilizada | Para que serve |
+| --- | --- | --- |
+| **Conferência de quantidades** | Comparação entre pedidos e recebimentos | Encontrar diferenças nos valores |
+| **Cruzamento de tabelas** | Comparação entre tabelas relacionadas | Encontrar registros sem correspondência |
+| **Conferência de datas** | Comparação entre pedido e entrega | Identificar datas suspeitas |
+| **Análise da planilha** | Verificação das colunas adicionais do Excel | Encontrar informações fora do padrão |
+| **Validação com o cliente** | Perguntas sobre os resultados | Confirmar quais dados estão corretos |
+
+### Como funciona a conferência
+
+**1.** Consultamos as informações no banco.
+
+**2.** Comparamos os registros das tabelas relacionadas.
+
+**3.** Se encontramos alguma diferença, registramos o caso.
+
+**4.** Apresentamos o problema ao cliente para confirmar o que aconteceu.
+
+---
 
 ## 3. Consultas preparadas para a reunião
 
-As consultas estão armazenadas no arquivo `sql/04_validacao.sql`.
+As seis consultas foram implementadas e executadas no arquivo [`sql/04_validacao.sql`](../sql/04_validacao.sql).
 
-### Consulta 1 — Recebimentos superiores aos pedidos
+| Consulta | O que verifica | Resultado |
+| --- | --- | ---: |
+| **Consulta 1** | Recebimentos maiores que os pedidos | **7 registros** |
+| **Consulta 2** | Diferenças entre quantidades entregues e recebidas | **18 registros** |
+| **Consulta 3** | Pedidos com ordem de compra zerada | **11 registros** |
+| **Consulta 4** | Datas de entrega anteriores às datas dos pedidos | **20 registros** |
+| **Consulta 5** | Produtos vendidos sem cadastro correspondente na filial | **13 registros** |
+| **Consulta 6** | Entradas de mercadoria sem pedido correspondente | **2 registros** |
 
-Compara a quantidade pedida com o total recebido por ordem de compra e produto.
+**Exemplo:** a Consulta 1 identificou o produto P2, com 14 unidades pedidas e 64 registradas como recebidas.
 
-**Resultado:** 7 registros com recebimentos superiores às quantidades solicitadas.
+As consultas apenas verificam os dados. Elas não alteram os registros do banco.
 
-Exemplo: P2, com 14 unidades pedidas e 64 recebidas.
+---
 
-### Consulta 2 — Divergências entre quantidades entregues e recebidas
+## 4. Resumo dos resultados
 
-Compara `qtde_entregue` com os recebimentos registrados em `entradas_mercadoria`.
+| Indicador | Quantidade encontrada |
+| --- | ---: |
+| 📦 Recebimentos acima dos pedidos | **7** |
+| 🔄 Quantidades entregues e recebidas diferentes | **18** |
+| 🧾 Ordens de compra zeradas | **11** |
+| 📅 Datas que precisam de conferência | **20** |
+| 🏷️ Vendas sem produto cadastrado na mesma filial | **13** |
+| 🚚 Entradas sem pedido correspondente | **2** |
 
-**Resultado:** 18 registros com valores diferentes.
+> **Observação:** um mesmo registro pode aparecer em mais de uma verificação. Por isso, os números não devem ser somados como se fossem problemas independentes.
 
-Essas diferenças precisam ser esclarecidas, inclusive quanto ao significado operacional de cada campo.
+---
 
-### Consulta 3 — Ordens de compra zeradas
+## 5. Erros e inconsistências encontrados nos dados
 
-Localiza pedidos em que `ordem_compra = 0`.
+Esta tabela reúne os resultados das consultas executadas.
 
-**Resultado:** 11 pedidos, de ID 19 a 29.
-
-É necessário confirmar se esses valores indicam pedidos sem ordem cadastrada ou problemas na estrutura da planilha.
-
-### Consulta 4 — Datas anteriores aos pedidos
-
-Identifica registros cuja `data_entrega` é anterior à `data_pedido`.
-
-**Resultado:** 20 registros.
-
-O cliente deverá confirmar se `data_entrega` representa uma entrega efetiva, uma previsão ou outro evento administrativo.
-
-### Consulta 5 — Produtos sem cadastro correspondente
-
-Verifica pedidos e vendas que referenciam produtos não encontrados em `produtos_filial` para a mesma filial.
-
-**Resultado:** 13 registros, todos originados da tabela `venda`.
-
-Os registros devem ser comparados com o cadastro de produtos utilizado na operação.
-
-### Consulta 6 — Entradas sem pedido correspondente
-
-Localiza entradas de mercadorias sem correspondência com `pedido_compra`, utilizando a ordem de compra e o produto.
-
-**Resultado:** 2 registros:
-
-- Ordem 19, produto P19, nota fiscal NFE19.
-- Ordem 20, produto P20, nota fiscal NFE20.
-
-Esses registros precisam ser investigados junto aos pedidos com número de ordem zerado.
-
-## Erros encontrados nos dados
-
-A tabela apresenta inconsistências e situações suspeitas encontradas durante a validação.
-
-| Tabela | Problema | Quantidade | Consulta que mostra |
+| Tabela analisada | Problema encontrado | Quantidade | Evidência |
 | --- | --- | ---: | --- |
-| pedido_compra / entradas_mercadoria | Recebimentos superiores às quantidades solicitadas | 7 | Consulta 1 |
-| pedido_compra / entradas_mercadoria | Divergências entre quantidade entregue e quantidade recebida | 18 | Consulta 2 |
-| pedido_compra | Ordens de compra com valor zero | 11 | Consulta 3 |
-| pedido_compra | Data de entrega anterior à data do pedido | 20 | Consulta 4 |
-| venda / produtos_filial | Vendas sem produto correspondente na mesma filial | 13 | Consulta 5 |
-| entradas_mercadoria / pedido_compra | Entradas sem pedido correspondente | 2 | Consulta 6 |
-| Planilha Excel — pedido_compra | Onze colunas adicionais com informações em nove linhas | 9 linhas | Inspeção da planilha com Python, documentada na Parte 1 |
+| `pedido_compra` + `entradas_mercadoria` | Recebimento maior que o pedido | **7** | Consulta 1 |
+| `pedido_compra` + `entradas_mercadoria` | Diferença entre entregue e recebido | **18** | Consulta 2 |
+| `pedido_compra` | Ordem de compra igual a zero | **11** | Consulta 3 |
+| `pedido_compra` | Data de entrega anterior ao pedido | **20** | Consulta 4 |
+| `venda` + `produtos_filial` | Venda sem produto cadastrado na filial | **13** | Consulta 5 |
+| `entradas_mercadoria` + `pedido_compra` | Entrada sem pedido correspondente | **2** | Consulta 6 |
+| Excel — aba `pedido_compra` | Colunas adicionais com informações diferentes | **9 linhas** | Conferência do Excel |
 
-**Observação:** as quantidades podem se sobrepor, pois um mesmo registro pode apresentar mais de uma inconsistência.
+**Importante:** os resultados das seis consultas foram obtidos na base importada, incluindo registros de outros meses. Fevereiro de 2025 é o período de referência da reunião, não um filtro aplicado a todas as verificações.
 
-As seis consultas SQL verificam os dados importados. O problema das colunas adicionais foi identificado diretamente na planilha Excel, pois essas colunas não foram incorporadas ao banco.
+A análise das colunas adicionais foi feita diretamente no Excel, pois elas não foram incluídas na importação principal.
 
-## Encaminhamentos da reunião
+---
 
-Durante a reunião, serão apresentados os resultados das consultas e exemplos dos registros identificados.
+## 6. Encaminhamento da reunião
 
-O cliente deverá confirmar os valores corretos e esclarecer as regras utilizadas para registrar pedidos, entregas e entradas de mercadorias.
+Após apresentar os resultados, precisamos definir com o cliente quais informações estão corretas e quais precisam de ajuste.
 
-Após essa confirmação, as correções necessárias poderão ser planejadas, preservando o histórico das alterações e evitando modificações sem justificativa.
+| Etapa | O que será feito |
+| --- | --- |
+| **1. Apresentar** | Mostrar os problemas encontrados nas consultas |
+| **2. Confirmar** | Ouvir a explicação do cliente |
+| **3. Conferir** | Comparar os dados com pedidos e notas fiscais |
+| **4. Definir** | Identificar quais registros precisam ser corrigidos |
+| **5. Registrar** | Documentar as decisões e os ajustes necessários |
 
-A validação permitirá melhorar a confiabilidade dos dados utilizados nos relatórios e nas decisões da organização.
+### Resultado esperado
+
+A importação dos dados foi concluída e as consultas estão funcionando.
+
+Agora, a confirmação das informações com o cliente permitirá corrigir possíveis erros com segurança e melhorar a confiabilidade dos relatórios de compras, vendas e estoque.
