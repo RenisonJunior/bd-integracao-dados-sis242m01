@@ -1,6 +1,4 @@
 -- DDL corrigido para PostgreSQL
-
--- DDL corrigido para PostgreSQL
 -- Atividade de Integracao de Dados
 -- Parte 1: Criacao das tabelas
 
