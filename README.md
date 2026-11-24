@@ -11,7 +11,7 @@
 
 | Nome | Matrícula | Usuário do GitHub |
 | --- | --- | --- |
-| RENISON | 2535023 | renisonjunior |
+| Renison Carlos Brilhante Ribeiro Júnior | 2535023 | renisonjunior |
 
 ## O cenário
 
